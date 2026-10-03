@@ -1,4 +1,6 @@
-export const metadata = {
-  title: 'OutbidIndia — Pay more. Rank higher. Get seen.',
-  description: 'A public leaderboard where rank is decided only by the total amount paid, in rupees.'
-};
+@tailwind base; @tailwind components; @tailwind utilities;
+body { background: #0d0e12; color: #eceef3; font-family: var(--font-sans), system-ui, sans-serif; }
+:focus-visible { outline: 2px solid #ff9a3c; outline-offset: 2px; }
+@keyframes pop { from { transform: scale(.97); opacity: 0 } to { transform: none; opacity: 1 } }
+.pop { animation: pop .18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
