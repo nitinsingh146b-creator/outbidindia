@@ -52,42 +52,52 @@ export default function Board({ initial }) {
         <p className="text-sm text-mute">Current #1 bid</p>
         <p className="mt-1 text-4xl font-bold tabular-nums sm:text-5xl">{top ? inr(top) : 'No bids yet'}</p>
         <p className="mt-1 truncate text-sm text-mute">{data.rows[0] ? `by ${data.rows[0].name}` : 'Be the first on the board.'}</p>
-        <button onClick={() => { setOpen(true); setErr(''); }} className="mt-5 w-full rounded-xl bg-saffron px-5 py-3.5 text-base font-semibold text-black transition hover:brightness-110 active:scale-[.99]">
+        <button onClick={() => { setOpen(true); setErr(''); }} className="mt-5 w-full rounded-xl bg-saffron px-5 py-3.5 text-base font-semibold text-black">
           {top ? 'Outbid to Rank #1' : 'Place Bid'}
         </button>
-        {done && <p role="status" className="mt-3 text-sm text-saffron">Payment received. You're on the board.</p>}
+        {done && <p className="mt-3 text-sm text-saffron">Payment received. You're on the board.</p>}
       </section>
 
       <p className="mt-8 flex justify-between px-1 text-sm text-mute"><span>Leaderboard</span><span>{inr(data.total)} collected</span></p>
       <ol className="mt-2 overflow-hidden rounded-2xl border border-line bg-panel">
         {data.rows.length === 0 && <li className="p-8 text-center text-mute">Nobody here yet. The top spot costs ₹10.</li>}
         {data.rows.map((r, i) => (
-          <li key={r.key} className={`flex items-center gap-4 px-4 py-4 sm:px-5 ${i ? 'border-t border-line' : ''} ${i === 0 ? 'bg-saffron/10' : ''}`}>
-            <span className={`w-9 shrink-0 text-2xl font-bold tabular-nums ${i === 0 ? 'text-saffron' : 'text-mute'}`}>{i + 1}</span>
+          <li key={r.key} className={`flex items-center gap-4 px-4 py-4 ${i ? 'border-t border-line' : ''}`}>
+            <span className={`w-9 text-2xl font-bold ${i === 0 ? 'text-saffron' : 'text-mute'}`}>{i + 1}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">{r.name}</p>
-              <a href={r.url} target="_blank" rel="sponsored noopener noreferrer" className="block truncate text-sm text-mute hover:text-saffron">{r.url.replace(/^https?:\/\//, '')}</a>
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-mute">{r.url.replace(/^https?:\/\//, '')}</a>
             </div>
-            <span className="shrink-0 font-semibold tabular-nums">{inr(r.total)}</span>
+            <span className="font-semibold">{inr(r.total)}</span>
           </li>
         ))}
       </ol>
 
       <footer className="mt-12 space-y-1 text-center text-sm text-mute">
-        <p>Rank is decided only by total rupees paid. No algorithms, no accounts, no revenue sharing.</p>
-        <p>Payments via Razorpay (UPI, cards, netbanking). Bids are non-refundable.</p>
-        <p>© {new Date().getFullYear()} OutbidIndia</p>
+        <p>Rank is decided only by total rupees paid.</p>
+        <p>Payments via Razorpay. Bids are non-refundable.</p>
       </footer>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" onClick={() => !busy && setOpen(false)}>
-          <form onSubmit={pay} onClick={(e) => e.stopPropagation()} className="pop w-full max-w-md space-y-4 rounded-t-2xl border border-line bg-panel p-6 sm:rounded-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70" onClick={() => !busy && setOpen(false)}>
+          <form onSubmit={pay} onClick={(e) => e.stopPropagation()} className="w-full max-w-md space-y-4 rounded-t-2xl border border-line bg-panel p-6">
             <h2 className="text-xl font-bold">Place your bid</h2>
-            {[['name', 'Product name', 'text', 'Acme Pay'], ['url', 'Website URL', 'text', 'acme.in']].map(([k, label, t, ph]) => (
-              <label key={k} className="block text-sm text-mute">{label}
-                <input required type={t} placeholder={ph} value={f[k]} maxLength={k === 'name' ? 60 : 200} onChange={(e) => setF({ ...f, [k]: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-base text-white outline-none focus:border-saffron" />
-              </label>
-            ))}
+            <label className="block text-sm text-mute">Product name
+              <input required value={f.name} maxLength={60} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
+            </label>
+            <label className="block text-sm text-mute">Website URL
+              <input required value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
+            </label>
             <label className="block text-sm text-mute">Bid amount (₹)
-              <input required type="number" min="10" max="1000000" inputMode="numeric" placeholder={String(needed)} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })}
+              <input required type="number" min="10" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
+              <span className="mt-1 block">Pay at least {inr(needed)} to take Rank #1.</span>
+            </label>
+            {err && <p className="text-sm text-red-400">{err}</p>}
+            <button disabled={busy} className="w-full rounded-xl bg-saffron py-3.5 font-semibold text-black">{busy ? 'Opening payment…' : 'Pay with Razorpay'}</button>
+            <button type="button" onClick={() => setOpen(false)} className="w-full text-sm text-mute">Cancel</button>
+          </form>
+        </div>
+      )}
+    </main>
+  );
+}
