@@ -3,7 +3,13 @@ import { useEffect, useState } from 'react';
 import Script from 'next/script';
 
 const inr = (n) => '₹' + Number(n).toLocaleString('en-IN');
-const keyOf = (u) => { try { return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+const keyOf = (u) => {
+  try {
+    return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+};
 
 export default function Board({ initial }) {
   const [data, setData] = useState(initial);
@@ -13,45 +19,71 @@ export default function Board({ initial }) {
   const [err, setErr] = useState('');
   const [done, setDone] = useState(false);
 
-  const refresh = () => fetch('/api/leaderboard', { cache: 'no-store' }).then((r) => r.json()).then((d) => d.rows && setData(d)).catch(() => {});
-  useEffect(() => { const t = setInterval(refresh, 5000); return () => clearInterval(t); }, []);
+  const refresh = () =>
+    fetch('/api/leaderboard', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => d.rows && setData(d))
+      .catch(() => {});
+
+  useEffect(() => {
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   const top = data.rows[0]?.total || 0;
   const own = data.rows.find((r) => r.key.split('/')[0] === keyOf(f.url))?.total || 0;
   const needed = top ? Math.max(top - own + 1, 10) : 10;
 
   async function pay(e) {
-    e.preventDefault(); setErr(''); setBusy(true);
+    e.preventDefault();
+    setErr('');
+    setBusy(true);
     try {
-      const res = await fetch('/api/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) });
+      const res = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(f)
+      });
       const o = await res.json();
       if (!res.ok) throw new Error(o.error);
       const rz = new window.Razorpay({
-        key: o.key, amount: o.amount, currency: 'INR', order_id: o.orderId, name: 'OutbidIndia', description: `Bid for ${f.name}`,
+        key: o.key,
+        amount: o.amount,
+        currency: 'INR',
+        order_id: o.orderId,
+        name: 'OutbidIndia',
+        description: `Bid for ${f.name}`,
         theme: { color: '#ff9a3c' },
         handler: async (r) => {
-  const v = await fetch('/api/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(r)
-  });
-  const j = await v.json().catch(() => ({}));
-  if (!v.ok) {
-    setErr(j.error || 'Payment not confirmed');
-    setBusy(false);
-    return;
-  }
-  await refresh();
-  setOpen(false);
-  setDone(true);
-  setBusy(false);
-},
-modal: { ondismiss: () => setBusy(false) }
+          const v = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(r)
+          });
+          const j = await v.json().catch(() => ({}));
+          if (!v.ok) {
+            setErr(j.error || 'Payment not confirmed');
+            setBusy(false);
+            return;
+          }
+          await refresh();
+          setOpen(false);
+          setDone(true);
+          setBusy(false);
+          setF({ name: '', url: '', amount: '' });
+          setTimeout(() => setDone(false), 5000);
+        },
         modal: { ondismiss: () => setBusy(false) }
       });
-      rz.on('payment.failed', () => { setErr('Payment failed. Try again.'); setBusy(false); });
+      rz.on('payment.failed', () => {
+        setErr('Payment failed. Try again.');
+        setBusy(false);
+      });
       rz.open();
-    } catch (x) { setErr(x.message || 'Something went wrong'); setBusy(false); }
+    } catch (x) {
+      setErr(x.message || 'Something went wrong');
+      setBusy(false);
+    }
   }
 
   return (
