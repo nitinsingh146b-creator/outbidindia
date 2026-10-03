@@ -10,19 +10,23 @@ export async function POST(req) {
   if (!u || !u.hostname.includes('.') || !['http:', 'https:'].includes(u.protocol)) return Response.json({ error: 'Enter a valid website URL' }, { status: 400 });
   if (!(rupees >= 10 && rupees <= 1000000)) return Response.json({ error: 'Bid must be between ₹10 and ₹10,00,000' }, { status: 400 });
 
+  const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) return Response.json({ error: 'Razorpay keys missing on server' }, { status: 500 });
+
   const url = u.origin + (u.pathname === '/' ? '' : u.pathname);
   const url_key = u.hostname.replace(/^www\./, '').toLowerCase() + (u.pathname === '/' ? '' : u.pathname.toLowerCase());
 
-  const auth = Buffer.from(`${process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64');
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
   const res = await fetch('https://api.razorpay.com/v1/orders', {
     method: 'POST',
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ amount: rupees * 100, currency: 'INR', receipt: url_key.slice(0, 40) })
   });
-  if (!res.ok) return Response.json({ error: 'Could not start payment' }, { status: 502 });
-  const order = await res.json();
+  const order = await res.json().catch(() => ({}));
+  if (!res.ok) return Response.json({ error: order.error?.description || 'Could not start payment' }, { status: 502 });
 
   const { error } = await db().from('bids').insert({ name, url, url_key, amount_paise: rupees * 100, order_id: order.id });
   if (error) return Response.json({ error: 'Could not save bid' }, { status: 500 });
-  return Response.json({ orderId: order.id, amount: order.amount, key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID });
+  return Response.json({ orderId: order.id, amount: order.amount, key: keyId });
 }
