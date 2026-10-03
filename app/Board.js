@@ -2,17 +2,11 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN');
-const keyOf = (u) => {
-  try {
-    return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.replace(/^www\./, '').toLowerCase();
-  } catch {
-    return '';
-  }
-};
+const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+const host = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 export default function Board({ initial }) {
-  const [data, setData] = useState(initial);
+  const [data, setData] = useState(initial || { rows: [], total: 0 });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', url: '', amount: '' });
   const [busy, setBusy] = useState(false);
@@ -31,9 +25,9 @@ export default function Board({ initial }) {
     return () => clearInterval(t);
   }, []);
 
-  const top = data.rows[0]?.total || 0;
-  const own = data.rows.find((r) => r.key.split('/')[0] === keyOf(f.url))?.total || 0;
-  const needed = top ? Math.max(top - own + 1, 10) : 10;
+  const rows = data.rows || [];
+  const top = rows[0]?.total || 0;
+  const claim = Math.max(top + 1, 10);
 
   async function pay(e) {
     e.preventDefault();
@@ -61,12 +55,7 @@ export default function Board({ initial }) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(r)
           });
-          const j = await v.json().catch(() => ({}));
-          if (!v.ok) {
-            setErr(j.error || 'Payment not confirmed');
-            setBusy(false);
-            return;
-          }
+          if (!v.ok) { setErr('Payment not confirmed'); setBusy(false); return; }
           await refresh();
           setOpen(false);
           setDone(true);
@@ -76,10 +65,7 @@ export default function Board({ initial }) {
         },
         modal: { ondismiss: () => setBusy(false) }
       });
-      rz.on('payment.failed', () => {
-        setErr('Payment failed. Try again.');
-        setBusy(false);
-      });
+      rz.on('payment.failed', () => { setErr('Payment failed. Try again.'); setBusy(false); });
       rz.open();
     } catch (x) {
       setErr(x.message || 'Something went wrong');
@@ -88,55 +74,60 @@ export default function Board({ initial }) {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 pb-16 pt-14 sm:pt-20">
+    <main className="mx-auto max-w-3xl px-4 pb-20 pt-8">
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-      <header>
-        <h1 className="text-5xl font-extrabold tracking-tight sm:text-7xl">Outbid<span className="text-saffron">India</span></h1>
-        <p className="mt-3 text-lg text-mute">Pay more. Rank higher. Get seen.</p>
+      <header className="flex items-end justify-between">
+        <div>
+          <p className="text-sm tracking-wide text-mute">outbid · india</p>
+          <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">Outbid<span className="text-saffron">India</span></h1>
+        </div>
+        <p className="text-right text-sm text-mute">{inr(data.total)}<br />collected</p>
       </header>
-      <section className="mt-10 rounded-2xl border border-line bg-panel p-5 sm:p-6">
-        <p className="text-sm text-mute">Current #1 bid</p>
-        <p className="mt-1 text-4xl font-bold tabular-nums sm:text-5xl">{top ? inr(top) : 'No bids yet'}</p>
-        <p className="mt-1 truncate text-sm text-mute">{data.rows[0] ? 'by ' + data.rows[0].name : 'Be the first on the board.'}</p>
-        <button onClick={() => { setOpen(true); setErr(''); }} className="mt-5 w-full rounded-xl bg-saffron px-5 py-3.5 text-base font-semibold text-black">
-          {top ? 'Outbid to Rank #1' : 'Place Bid'}
+
+      <section className="mt-8 rounded-3xl border border-line bg-panel/80 p-5 shadow-2xl shadow-black/40 sm:p-7">
+        <p className="text-sm text-mute">Claim #1 for</p>
+        <p className="mt-1 text-5xl font-extrabold tabular-nums text-saffron sm:text-6xl">{inr(claim)}</p>
+        <p className="mt-2 text-mute">{top ? rows[0].name + ' holds it at ' + inr(top) : 'No one has claimed it yet.'}</p>
+        <button onClick={() => { setF({ ...f, amount: String(claim) }); setOpen(true); setErr(''); }} className="mt-5 w-full rounded-2xl bg-saffron py-4 text-lg font-bold text-black">
+          Claim rank #1
         </button>
-        {done && <p className="mt-3 text-sm text-saffron">Payment received. You're on the board.</p>}
+        {done && <p className="mt-3 text-sm text-saffron">Payment received. Rank updating.</p>}
       </section>
-      <p className="mt-8 flex justify-between px-1 text-sm text-mute"><span>Leaderboard</span><span>{inr(data.total)} collected</span></p>
-      <ol className="mt-2 overflow-hidden rounded-2xl border border-line bg-panel">
-        {data.rows.length === 0 && <li className="p-8 text-center text-mute">Nobody here yet. The top spot costs ₹10.</li>}
-        {data.rows.map((r, i) => (
-          <li key={r.key} className={'flex items-center gap-4 px-4 py-4 ' + (i ? 'border-t border-line' : '')}>
-            <span className={'w-9 text-2xl font-bold ' + (i === 0 ? 'text-saffron' : 'text-mute')}>{i + 1}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{r.name}</p>
-              <a href={r.url} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-mute">{String(r.url || '').replace(/^https?:\/\//, '')}</a>
+
+      <ol className="mt-8 space-y-3">
+        {rows.length === 0 && <li className="rounded-2xl border border-line bg-panel p-8 text-center text-mute">The top spot costs ₹10.</li>}
+        {rows.map((r, i) => (
+          <li key={r.key} className={'rounded-2xl border p-4 sm:p-5 ' + (i === 0 ? 'border-saffron/60 bg-saffron/10' : 'border-line bg-panel')}>
+            <div className="flex items-start gap-4">
+              <span className={'text-3xl font-black tabular-nums ' + (i === 0 ? 'text-saffron' : 'text-mute')}>#{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-bold">{r.name}</p>
+                <a href={r.url} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-mute">{host(r.url)}</a>
+              </div>
+              <p className="text-right font-bold tabular-nums">{inr(r.total)}</p>
             </div>
-            <span className="font-semibold">{inr(r.total)}</span>
+            <button onClick={() => { setF({ name: '', url: '', amount: String(Math.max(r.total + 1, 10)) }); setOpen(true); setErr(''); }} className="mt-4 w-full rounded-xl border border-line py-2.5 text-sm font-semibold hover:border-saffron">
+              Claim this rank for {inr(Math.max(r.total + 1, 10))}
+            </button>
           </li>
         ))}
       </ol>
-      <footer className="mt-12 space-y-1 text-center text-sm text-mute">
-        <p>Rank is decided only by total rupees paid.</p>
-        <p>Payments via Razorpay. Bids are non-refundable.</p>
-      </footer>
+
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70" onClick={() => !busy && setOpen(false)}>
-          <form onSubmit={pay} onClick={(e) => e.stopPropagation()} className="w-full max-w-md space-y-4 rounded-t-2xl border border-line bg-panel p-6">
-            <h2 className="text-xl font-bold">Place your bid</h2>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center" onClick={() => !busy && setOpen(false)}>
+          <form onSubmit={pay} onClick={(e) => e.stopPropagation()} className="w-full max-w-md space-y-4 rounded-t-3xl border border-line bg-panel p-6 sm:rounded-3xl">
+            <h2 className="text-2xl font-bold">Place your bid</h2>
             <label className="block text-sm text-mute">Product name
-              <input required value={f.name} maxLength={60} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
+              <input required value={f.name} maxLength={60} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1 w-full rounded-xl border border-line bg-ink px-3 py-3 text-white" />
             </label>
             <label className="block text-sm text-mute">Website URL
-              <input required value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
+              <input required value={f.url} placeholder="https://" onChange={(e) => setF({ ...f, url: e.target.value })} className="mt-1 w-full rounded-xl border border-line bg-ink px-3 py-3 text-white" />
             </label>
             <label className="block text-sm text-mute">Bid amount (₹)
-              <input required type="number" min="10" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2.5 text-white" />
-              <span className="mt-1 block">Pay at least {inr(needed)} to take Rank #1.</span>
+              <input required type="number" min="10" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} className="mt-1 w-full rounded-xl border border-line bg-ink px-3 py-3 text-white" />
             </label>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button disabled={busy} className="w-full rounded-xl bg-saffron py-3.5 font-semibold text-black">{busy ? 'Opening payment…' : 'Pay with Razorpay'}</button>
+            <button disabled={busy} className="w-full rounded-2xl bg-saffron py-3.5 font-bold text-black">{busy ? 'Opening payment…' : 'Pay with Razorpay'}</button>
             <button type="button" onClick={() => setOpen(false)} className="w-full text-sm text-mute">Cancel</button>
           </form>
         </div>
