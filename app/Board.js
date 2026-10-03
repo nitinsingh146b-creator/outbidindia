@@ -30,9 +30,11 @@ export default function Board({ initial }) {
         key: o.key, amount: o.amount, currency: 'INR', order_id: o.orderId, name: 'OutbidIndia', description: `Bid for ${f.name}`,
         theme: { color: '#ff9a3c' },
         handler: async (r) => {
-          await fetch('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) });
-          await refresh(); setOpen(false); setDone(true); setF({ name: '', url: '', amount: '' }); setTimeout(() => setDone(false), 5000);
-        },
+  const v = await fetch('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) });
+  const j = await v.json().catch(() => ({}));
+  if (!v.ok) { setErr(j.error || 'Payment not confirmed'); setBusy(false); return; }
+  await refresh(); setOpen(false); setDone(true); setF({ name: '', url: '', amount: '' }); setTimeout(() => setDone(false), 5000);
+},
         modal: { ondismiss: () => setBusy(false) }
       });
       rz.on('payment.failed', () => { setErr('Payment failed. Try again.'); setBusy(false); });
